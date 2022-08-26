@@ -206,13 +206,14 @@ void step(int dt) {
                     goal.x = index % COLS;
                     goal.y = index / COLS;
                 }
-                if (levels[0][i] == 'X') {
+                if (levels[0][i] == 'E' || levels[0][i] == 'e') {
                     for (int i = 0; i < MAX_ENEMIES; i++) {
                         enemy_t *enemy = &enemies[i];
                         if (!enemy->alive) {
-                            enemy->x = (index & COLS) * BLOCK_SIZE;
+                            enemy->x = (index % COLS) * BLOCK_SIZE;
                             enemy->y = (index / COLS) * BLOCK_SIZE;
                             enemy->alive = true;
+                            break;
                         }
                     }
                 }
@@ -296,7 +297,7 @@ void render() {
         }
     }
 
-    if (!player.alive) render_text(0xffffff, "You lost!\n(Press r to restart)", 40, WIDTH/2, HEIGHT/2);
+    if (!player.alive) render_text(0xffffff, "You lost!\n(r to restart)", 40, WIDTH/2, HEIGHT/2);
 
     int goalx = goal.x*BLOCK_SIZE;
     int goaly = goal.y*BLOCK_SIZE;

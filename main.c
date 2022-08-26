@@ -34,21 +34,21 @@ typedef unsigned long size_t;
 #define MAX_SHOT_PARTICLES 20
 
 typedef struct {
-    const int size;
     int x;
     int y;
     double vy;
     double vx;
     bool looking_right;
+    bool alive;
 } player_t;
 
 static player_t player = {
-    .size = PLAYER_SIZE,
     .x = 0,
     .y = HEIGHT - PLAYER_SIZE,
     .vx = 0,
     .vy = 0,
     .looking_right = true,
+    .alive = true,
 };
 
 typedef struct {
@@ -62,9 +62,17 @@ typedef struct {
     int vy;
 } particle_t;
 
+typedef struct {
+    bool alive;
+    int x, y;
+} enemy_t;
+
 static particle_t shoot_particles[MAX_SHOT_PARTICLES];
 
 static bool active[ROWS][COLS] = {{false}};
+
+#define MAX_ENEMIES 20
+static enemy_t enemies[MAX_ENEMIES] = {0};
 
 static char levels[10][(COLS + 1) * ROWS];
 static pos goal = {0, 0};
@@ -74,19 +82,19 @@ static int left = false;
 static bool grounded = false, jumping = false, shooting = false;
 static int level = -1;
 
-static int collision_y(player_t *const player, const int dy) {
-    if (player->y + dy > HEIGHT - player->size) return HEIGHT - player->size;
+static int collision_y(const pos position, const int dy, const int W, const int H) {
+    if (position.y + dy > HEIGHT - H) return HEIGHT - H;
 
     for (size_t i = 0; i < ROWS; i++) {
         for (size_t j = 0; j < COLS; j++) {
             if (active[i][j]) {
                 int obj_x = j * BLOCK_SIZE;
                 int obj_y = i * BLOCK_SIZE;
-                if (player->x + player->size > obj_x && player->x < obj_x + BLOCK_SIZE) {
-                    if ((player->y + player->size <= obj_y && player->y + player->size + dy >= obj_y) ||
-                        (player->y >= obj_y + BLOCK_SIZE   && player->y + dy <= obj_y + BLOCK_SIZE)) {
+                if (position.x + W > obj_x && position.x < obj_x + BLOCK_SIZE) {
+                    if ((position.y + H <= obj_y && position.y + H + dy >= obj_y) ||
+                        (position.y >= obj_y + BLOCK_SIZE   && position.y + dy <= obj_y + BLOCK_SIZE)) {
                         if (dy > 0) {
-                            return obj_y - player->size;
+                            return obj_y - H;
                         } else if (dy < 0) {
                             return obj_y + BLOCK_SIZE;
                         }
@@ -99,20 +107,20 @@ static int collision_y(player_t *const player, const int dy) {
     return -1;
 }
 
-static int collision_x(player_t *const player, const int dx) {
-    if (player->x + dx > WIDTH - player->size) return WIDTH - player->size;
-    if (player->x < 0) return 0;
+static int collision_x(const pos position, const int dx, const int W, const int H) {
+    if (position.x + dx > WIDTH - W) return WIDTH - W;
+    if (position.x < 0) return 0;
 
     for (size_t i = 0; i < ROWS; i++) {
         for (size_t j = 0; j < COLS; j++) {
             if (active[i][j]) {
                 int obj_x = j * BLOCK_SIZE;
                 int obj_y = i * BLOCK_SIZE;
-                if ((player->x + player->size <= obj_x && player->x + player->size + dx >= obj_x) ||
-                    (player->x >= obj_x + BLOCK_SIZE && player->x + dx <= obj_x + BLOCK_SIZE)) {
-                    if (player->y + player->size > obj_y && player->y < obj_y + BLOCK_SIZE) {
+                if ((position.x + W <= obj_x && position.x + W + dx >= obj_x) ||
+                    (position.x >= obj_x + BLOCK_SIZE && position.x + dx <= obj_x + BLOCK_SIZE)) {
+                    if (position.y + H > obj_y && position.y < obj_y + BLOCK_SIZE) {
                         if (dx > 0) {
-                            return obj_x - player->size;
+                            return obj_x - W;
                         } else if (dx < 0) {
                             return obj_x + BLOCK_SIZE;
                         }
@@ -150,7 +158,7 @@ static void update_player(int dt, player_t *const player) {
     if (player->vy < JUMP_MAX_VEL) player->vy += JUMP_FACTOR;
 
     int dx = (dt * player->vx) / FACTOR;
-    int collx = collision_x(player, dx);
+    int collx = collision_x((pos){player->x, player->y}, dx, PLAYER_SIZE, PLAYER_SIZE);
     if (collx == -1)
         player->x += dx;
     else {
@@ -159,7 +167,7 @@ static void update_player(int dt, player_t *const player) {
     }
 
     int dy = (dt * player->vy) / FACTOR;
-    int colly = collision_y(player, dy);
+    int colly = collision_y((pos){player->x, player->y}, dy, PLAYER_SIZE, PLAYER_SIZE);
 
     if (colly == -1)
         player->y   += dy;
@@ -175,7 +183,7 @@ static void shoot(player_t *player) {
         if (!shoot_particles[i].existend) {
             shoot_particles[i].existend = true;
             shoot_particles[i].position.x = (player->looking_right)?
-                player->x + player->size:
+                player->x + PLAYER_SIZE:
                 player->x;
             shoot_particles[i].position.y = player->y + BLOCK_SIZE - (BLOCK_SIZE / 4);
             shoot_particles[i].vx = (player->looking_right)?1:-1;
@@ -185,7 +193,7 @@ static void shoot(player_t *player) {
 }
 
 
-#define SHOOT_COOLDOWN 10
+#define SHOOT_COOLDOWN 15
 static int cooldown = 0;
 void step(int dt) {
     if (levels[0][0] != 0) {
@@ -198,30 +206,79 @@ void step(int dt) {
                     goal.x = index % COLS;
                     goal.y = index / COLS;
                 }
+                if (levels[0][i] == 'X') {
+                    for (int i = 0; i < MAX_ENEMIES; i++) {
+                        enemy_t *enemy = &enemies[i];
+                        if (!enemy->alive) {
+                            enemy->x = (index & COLS) * BLOCK_SIZE;
+                            enemy->y = (index / COLS) * BLOCK_SIZE;
+                            enemy->alive = true;
+                        }
+                    }
+                }
                 active[index / COLS][index % COLS] = levels[0][i]=='#';
                 index++;
             }
         }
     }
-    update_player(dt, &player);
+
+    if (player.alive) update_player(dt, &player);
 
     if (cooldown > 0) cooldown--;
     else {
-        if (shooting) shoot(&player);
-        cooldown = SHOOT_COOLDOWN;
+        if (shooting) {
+            shoot(&player);
+            cooldown = SHOOT_COOLDOWN;
+        }
     }
 
     for (int i = 0; i < MAX_SHOT_PARTICLES; i++) {
-        particle_t particle = shoot_particles[i];
-        if (!particle.existend) continue;
-        shoot_particles[i].position.x += particle.vx * dt;
-        shoot_particles[i].position.y += particle.vy * dt;
+        particle_t *particle = &shoot_particles[i];
+        if (!particle->existend) continue;
+        if (collision_x(particle->position, particle->vx * dt, PLAYER_SIZE, BLOCK_SIZE/2) > 0 ||
+            collision_y(particle->position, particle->vy * dt, PLAYER_SIZE, BLOCK_SIZE/2) > 0) {
+            particle->existend = false;
+            continue;
+        }
+        particle->position.x += particle->vx * dt;
+        particle->position.y += particle->vy * dt;
 
-        if (shoot_particles[i].position.x < 0 ||
-            shoot_particles[i].position.x > WIDTH ||
-            shoot_particles[i].position.y < 0 ||
-            shoot_particles[i].position.y > HEIGHT) {
-            shoot_particles[i].existend = false;
+        
+        if (particle->position.x < 0 ||
+            particle->position.x > WIDTH ||
+            particle->position.y < 0 ||
+            particle->position.y > HEIGHT) {
+            particle->existend = false;
+        }
+    }
+
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        enemy_t *enemy = &enemies[i];
+        if (enemy->alive) {
+            // check for player
+            if ((player.x >= enemy->x && player.x <= enemy->x+PLAYER_SIZE) ||
+                    (player.x+PLAYER_SIZE >= enemy->x && player.x+PLAYER_SIZE <= enemy->x+PLAYER_SIZE)) {
+                    if ((player.y >= enemy->y && player.y <= enemy->y+PLAYER_SIZE) ||
+                        (player.y+PLAYER_SIZE >= enemy->y && player.y+PLAYER_SIZE <= enemy->y+PLAYER_SIZE)) {
+                        player.alive = false;
+                        println("LOST");
+                        break;
+                    }
+                }
+            
+            // check for shots
+            for (int j = 0; j < MAX_SHOT_PARTICLES; j++) {
+                particle_t *particle = &shoot_particles[j];
+                if (!particle->existend) continue;
+                if ((particle->position.x > enemy->x && particle->position.x < enemy->x+PLAYER_SIZE) ||
+                    (particle->position.x+PLAYER_SIZE > enemy->x && particle->position.x+PLAYER_SIZE < enemy->x+PLAYER_SIZE)) {
+                    if ((particle->position.y > enemy->y && particle->position.y < enemy->y+PLAYER_SIZE) ||
+                        (particle->position.y+PLAYER_SIZE > enemy->y && particle->position.y+PLAYER_SIZE < enemy->y+PLAYER_SIZE)) {
+                        enemy->alive = false;
+                        break;
+                    }
+                }
+            }
         }
     }
 }
@@ -239,12 +296,14 @@ void render() {
         }
     }
 
+    if (!player.alive) render_text(0xffffff, "You lost!\n(Press r to restart)", 40, WIDTH/2, HEIGHT/2);
+
     int goalx = goal.x*BLOCK_SIZE;
     int goaly = goal.y*BLOCK_SIZE;
-    if (goalx + BLOCK_SIZE > player.x && goalx < player.x + player.size &&
-        goaly + BLOCK_SIZE > player.y && goaly < player.y + player.size) {
+    if (goalx + BLOCK_SIZE > player.x && goalx < player.x + PLAYER_SIZE &&
+        goaly + BLOCK_SIZE > player.y && goaly < player.y + PLAYER_SIZE) {
         render_text(0xffffff, "You won!", 40, WIDTH/2, HEIGHT/2);
-        println("you won!");
+        println("WON");
     }
 
     for (int i = 0; i < MAX_SHOT_PARTICLES; i++) {
@@ -254,6 +313,15 @@ void render() {
                              particle.position.x,
                              particle.position.y,
                              BLOCK_SIZE*2, BLOCK_SIZE/2);
+    }
+
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        enemy_t enemy = enemies[i];
+        if (enemy.alive)
+            render_fill_rect(0x0000ff,
+                             enemy.x,
+                             enemy.y,
+                             PLAYER_SIZE, PLAYER_SIZE);
     }
 }
 
@@ -275,6 +343,7 @@ void game_keydown(int keycode) {
     case ARROW_DOWN:
     case 'S':
         if (cooldown == 0) {
+            println("SHOOT");
             shoot(&player);
             cooldown = SHOOT_COOLDOWN;
         }
@@ -301,6 +370,13 @@ void game_keyup(int keycode) {
     case ARROW_DOWN:
     case 'S':
         shooting = false;
+        cooldown = 0;
+        break;
+    case 'R':
+        player.x     = 0;
+        player.y     = HEIGHT - PLAYER_SIZE;
+        player.alive = true;
+        level        = -1;
         break;
     }
 }

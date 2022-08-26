@@ -5,7 +5,7 @@ $ make
 ```
 - Start an httpserver:
 ```shell
-$ python -m'http.server 8080
+$ python -m http.server 8080
 ```
 
 OR (using @miezekatze64's [httpserver](github.com/miezekatze64/httpserver))

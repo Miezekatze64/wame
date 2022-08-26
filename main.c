@@ -3,8 +3,10 @@ void println(const char *str);
 void request_level(const char *const name, char *const buffer);
 void render_text(int color, const char *text, int size, int x, int y);
 
-#include <stdbool.h>
 typedef unsigned long size_t;
+#define NULL ((void*)0)
+
+#include <stdbool.h>
 
 #define BLOCK_SIZE 25
 #define COLS       50
@@ -29,12 +31,15 @@ typedef unsigned long size_t;
 #define FRICTION     0.08
 #define FACTOR       2
 
+#define MAX_SHOT_PARTICLES 20
+
 typedef struct {
     const int size;
     int x;
     int y;
     double vy;
     double vx;
+    bool looking_right;
 } player_t;
 
 static player_t player = {
@@ -43,11 +48,21 @@ static player_t player = {
     .y = HEIGHT - PLAYER_SIZE,
     .vx = 0,
     .vy = 0,
+    .looking_right = true,
 };
 
 typedef struct {
     int x, y;
 } pos;
+
+typedef struct {
+    bool existend;
+    pos position;
+    int vx;
+    int vy;
+} particle_t;
+
+static particle_t shoot_particles[MAX_SHOT_PARTICLES];
 
 static bool active[ROWS][COLS] = {{false}};
 
@@ -56,8 +71,7 @@ static pos goal = {0, 0};
 static int right = false;
 static int left = false;
 
-static bool grounded = false, jumping = false;
-
+static bool grounded = false, jumping = false, shooting = false;
 static int level = -1;
 
 static int collision_y(player_t *const player, const int dy) {
@@ -112,15 +126,21 @@ static int collision_x(player_t *const player, const int dx) {
 
 static void update_player(int dt, player_t *const player) {
     if (right) {
+        if (!left) player->looking_right = true;
         if (player->vx < MAX_X_VEL) player->vx += X_DELTA_VEL;
     }
 
     if (left) {
+        if (!right) player->looking_right = false;
         if (player->vx > -MAX_X_VEL) player->vx -= X_DELTA_VEL;
     }
 
-    if  (player->vx > 0) player->vx -= FRICTION;
-    if  (player->vx < 0) player->vx += FRICTION;
+    if  (player->vx > 0) {
+        player->vx -= FRICTION;
+    }
+    if  (player->vx < 0) {
+        player->vx += FRICTION;
+    }
 
     if (jumping && grounded) {
         player->vy = -JUMP_MAX_VEL;
@@ -150,6 +170,23 @@ static void update_player(int dt, player_t *const player) {
     }
 }
 
+static void shoot(player_t *player) {
+    for (int i = 0; i < MAX_SHOT_PARTICLES; i++) {
+        if (!shoot_particles[i].existend) {
+            shoot_particles[i].existend = true;
+            shoot_particles[i].position.x = (player->looking_right)?
+                player->x + player->size:
+                player->x;
+            shoot_particles[i].position.y = player->y + BLOCK_SIZE - (BLOCK_SIZE / 4);
+            shoot_particles[i].vx = (player->looking_right)?1:-1;
+            break;
+        }
+    }
+}
+
+
+#define SHOOT_COOLDOWN 10
+static int cooldown = 0;
 void step(int dt) {
     if (levels[0][0] != 0) {
         if (level == -1) {
@@ -167,6 +204,26 @@ void step(int dt) {
         }
     }
     update_player(dt, &player);
+
+    if (cooldown > 0) cooldown--;
+    else {
+        if (shooting) shoot(&player);
+        cooldown = SHOOT_COOLDOWN;
+    }
+
+    for (int i = 0; i < MAX_SHOT_PARTICLES; i++) {
+        particle_t particle = shoot_particles[i];
+        if (!particle.existend) continue;
+        shoot_particles[i].position.x += particle.vx * dt;
+        shoot_particles[i].position.y += particle.vy * dt;
+
+        if (shoot_particles[i].position.x < 0 ||
+            shoot_particles[i].position.x > WIDTH ||
+            shoot_particles[i].position.y < 0 ||
+            shoot_particles[i].position.y > HEIGHT) {
+            shoot_particles[i].existend = false;
+        }
+    }
 }
 
 
@@ -184,10 +241,19 @@ void render() {
 
     int goalx = goal.x*BLOCK_SIZE;
     int goaly = goal.y*BLOCK_SIZE;
-    if (goalx+BLOCK_SIZE > player.x && goalx < player.x + player.size &&
-        goaly+BLOCK_SIZE > player.y && goaly < player.y + player.size) {
+    if (goalx + BLOCK_SIZE > player.x && goalx < player.x + player.size &&
+        goaly + BLOCK_SIZE > player.y && goaly < player.y + player.size) {
         render_text(0xffffff, "You won!", 40, WIDTH/2, HEIGHT/2);
         println("you won!");
+    }
+
+    for (int i = 0; i < MAX_SHOT_PARTICLES; i++) {
+        particle_t particle = shoot_particles[i];
+        if (particle.existend)
+            render_fill_rect(0x00ffff,
+                             particle.position.x,
+                             particle.position.y,
+                             BLOCK_SIZE*2, BLOCK_SIZE/2);
     }
 }
 
@@ -206,6 +272,14 @@ void game_keydown(int keycode) {
     case 'W':
         jumping = true;
         break;
+    case ARROW_DOWN:
+    case 'S':
+        if (cooldown == 0) {
+            shoot(&player);
+            cooldown = SHOOT_COOLDOWN;
+        }
+        shooting = true;
+        break;
     }
 }
 
@@ -223,6 +297,10 @@ void game_keyup(int keycode) {
     case ARROW_UP:
     case 'W':
         jumping = false;
+        break;
+    case ARROW_DOWN:
+    case 'S':
+        shooting = false;
         break;
     }
 }

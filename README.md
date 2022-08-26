@@ -1,4 +1,7 @@
 # Getting started
+
+- Try it on [github.io](https://miezekatze64.github.io/wame)
+
 - Compile this program using
 ```shell
 $ make
@@ -8,7 +11,7 @@ $ make
 $ python -m http.server 8080
 ```
 
-OR (using @miezekatze64's [httpserver](github.com/miezekatze64/httpserver))
+OR (using @miezekatze64's [httpserver](https://github.com/miezekatze64/httpserver))
 ```
 $ httpserver
 ```

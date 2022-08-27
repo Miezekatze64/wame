@@ -40,9 +40,10 @@ typedef struct {
     double vx;
     bool looking_right;
     bool alive;
-} player_t;
+    bool right, left, grounded, jumping;
+} entity_t;
 
-static player_t player = {
+static entity_t player = {
     .x = 0,
     .y = HEIGHT - PLAYER_SIZE,
     .vx = 0,
@@ -63,8 +64,9 @@ typedef struct {
 } particle_t;
 
 typedef struct {
-    bool alive;
-    int x, y;
+    entity_t entity;
+    int left_x;
+    int right_x;
 } enemy_t;
 
 static particle_t shoot_particles[MAX_SHOT_PARTICLES];
@@ -76,11 +78,9 @@ static enemy_t enemies[MAX_ENEMIES] = {0};
 
 static char levels[10][(COLS + 1) * ROWS];
 static pos goal = {0, 0};
-static int right = false;
-static int left = false;
 
-static bool grounded = false, jumping = false, shooting = false;
 static int level = -1;
+static bool shooting = false;
 
 static int collision_y(const pos position, const int dy, const int W, const int H) {
     if (position.y + dy > HEIGHT - H) return HEIGHT - H;
@@ -132,53 +132,53 @@ static int collision_x(const pos position, const int dx, const int W, const int 
     return -1;
 }
 
-static void update_player(int dt, player_t *const player) {
-    if (right) {
-        if (!left) player->looking_right = true;
-        if (player->vx < MAX_X_VEL) player->vx += X_DELTA_VEL;
+static void update_entity(int dt, entity_t *const entity) {
+    if (entity->right) {
+        if (!entity->left) entity->looking_right = true;
+        if (entity->vx < MAX_X_VEL) entity->vx += X_DELTA_VEL;
     }
 
-    if (left) {
-        if (!right) player->looking_right = false;
-        if (player->vx > -MAX_X_VEL) player->vx -= X_DELTA_VEL;
+    if (entity->left) {
+        if (!entity->right) entity->looking_right = false;
+        if (entity->vx > -MAX_X_VEL) entity->vx -= X_DELTA_VEL;
     }
 
-    if  (player->vx > 0) {
-        player->vx -= FRICTION;
+    if  (entity->vx > 0) {
+        entity->vx -= FRICTION;
     }
-    if  (player->vx < 0) {
-        player->vx += FRICTION;
-    }
-
-    if (jumping && grounded) {
-        player->vy = -JUMP_MAX_VEL;
-        grounded = false;
+    if  (entity->vx < 0) {
+        entity->vx += FRICTION;
     }
 
-    if (player->vy < JUMP_MAX_VEL) player->vy += JUMP_FACTOR;
+    if (entity->jumping && entity->grounded) {
+        entity->vy = -JUMP_MAX_VEL;
+        entity->grounded = false;
+    }
 
-    int dx = (dt * player->vx) / FACTOR;
-    int collx = collision_x((pos){player->x, player->y}, dx, PLAYER_SIZE, PLAYER_SIZE);
+    if (entity->vy < JUMP_MAX_VEL) entity->vy += JUMP_FACTOR;
+
+    int dx = (dt * entity->vx) / FACTOR;
+    int collx = collision_x((pos){entity->x, entity->y}, dx, PLAYER_SIZE, PLAYER_SIZE);
     if (collx == -1)
-        player->x += dx;
+        entity->x += dx;
     else {
-        player->x   = collx;
-        player->vx  = 0;
+        entity->x   = collx;
+        entity->vx  = 0;
     }
 
-    int dy = (dt * player->vy) / FACTOR;
-    int colly = collision_y((pos){player->x, player->y}, dy, PLAYER_SIZE, PLAYER_SIZE);
+    int dy = (dt * entity->vy) / FACTOR;
+    int colly = collision_y((pos){entity->x, entity->y}, dy, PLAYER_SIZE, PLAYER_SIZE);
 
     if (colly == -1)
-        player->y   += dy;
+        entity->y   += dy;
     else {
-        /*if (dy > 0) */grounded    = true;
-        player->y   = colly;
-        player->vy  = 0;
+        /*if (dy > 0) */entity->grounded    = true;
+        entity->y   = colly;
+        entity->vy  = 0;
     }
 }
 
-static void shoot(player_t *player) {
+static void shoot(entity_t *player) {
     for (int i = 0; i < MAX_SHOT_PARTICLES; i++) {
         if (!shoot_particles[i].existend) {
             shoot_particles[i].existend = true;
@@ -206,13 +206,25 @@ void step(int dt) {
                     goal.x = index % COLS;
                     goal.y = index / COLS;
                 }
+                if (levels[0][i] == 'P' || levels[0][i] == 'p') {
+                    player.x = (index % COLS) * BLOCK_SIZE;
+                    player.y = (index / COLS) * BLOCK_SIZE;
+                }
                 if (levels[0][i] == 'E' || levels[0][i] == 'e') {
+                    int left = index;
+                    // search for path
+                    if (levels[0][i+1] == '-')
+                        for (index++,i++; levels[0][i] == '-'; i++, index++);
+                    //                    if (!(levels[0][i] == 'E' || levels[0][i] == 'e')) continue;
+
                     for (int i = 0; i < MAX_ENEMIES; i++) {
                         enemy_t *enemy = &enemies[i];
-                        if (!enemy->alive) {
-                            enemy->x = (index % COLS) * BLOCK_SIZE;
-                            enemy->y = (index / COLS) * BLOCK_SIZE;
-                            enemy->alive = true;
+                        if (!enemy->entity.alive) {
+                            enemy->entity.x = (index % COLS) * BLOCK_SIZE;
+                            enemy->entity.y = (index / COLS-1) * BLOCK_SIZE;
+                            enemy->entity.alive = true;
+                            enemy->left_x = (left % COLS)   * BLOCK_SIZE;
+                            enemy->right_x = (index % COLS-1) * BLOCK_SIZE;
                             break;
                         }
                     }
@@ -223,7 +235,7 @@ void step(int dt) {
         }
     }
 
-    if (player.alive) update_player(dt, &player);
+    if (player.alive) update_entity(dt, &player);
 
     if (cooldown > 0) cooldown--;
     else {
@@ -247,7 +259,6 @@ void step(int dt) {
         
         if (particle->position.x < 0 ||
             particle->position.x > WIDTH ||
-            particle->position.y < 0 ||
             particle->position.y > HEIGHT) {
             particle->existend = false;
         }
@@ -255,12 +266,19 @@ void step(int dt) {
 
     for (int i = 0; i < MAX_ENEMIES; i++) {
         enemy_t *enemy = &enemies[i];
-        if (enemy->alive) {
+        if (enemy->entity.alive) {
+            update_entity(dt, &enemy->entity);
+            if (enemy->left_x >= enemy->entity.x)  enemy->entity.looking_right = true;
+            if (enemy->right_x <= enemy->entity.x) enemy->entity.looking_right = false;
+            
+            if (enemy->entity.looking_right && enemy->entity.vx < MAX_X_VEL) enemy->entity.vx += X_DELTA_VEL;
+            else if (enemy->entity.vx > -MAX_X_VEL)                   enemy->entity.vx -= X_DELTA_VEL;
+
             // check for player
-            if ((player.x >= enemy->x && player.x <= enemy->x+PLAYER_SIZE) ||
-                    (player.x+PLAYER_SIZE >= enemy->x && player.x+PLAYER_SIZE <= enemy->x+PLAYER_SIZE)) {
-                    if ((player.y >= enemy->y && player.y <= enemy->y+PLAYER_SIZE) ||
-                        (player.y+PLAYER_SIZE >= enemy->y && player.y+PLAYER_SIZE <= enemy->y+PLAYER_SIZE)) {
+            if ((player.x >= enemy->entity.x && player.x <= enemy->entity.x+PLAYER_SIZE) ||
+                    (player.x+PLAYER_SIZE >= enemy->entity.x && player.x+PLAYER_SIZE <= enemy->entity.x+PLAYER_SIZE)) {
+                    if ((player.y >= enemy->entity.y && player.y <= enemy->entity.y+PLAYER_SIZE) ||
+                        (player.y+PLAYER_SIZE >= enemy->entity.y && player.y+PLAYER_SIZE <= enemy->entity.y+PLAYER_SIZE)) {
                         player.alive = false;
                         println("LOST");
                         break;
@@ -271,11 +289,11 @@ void step(int dt) {
             for (int j = 0; j < MAX_SHOT_PARTICLES; j++) {
                 particle_t *particle = &shoot_particles[j];
                 if (!particle->existend) continue;
-                if ((particle->position.x > enemy->x && particle->position.x < enemy->x+PLAYER_SIZE) ||
-                    (particle->position.x+PLAYER_SIZE > enemy->x && particle->position.x+PLAYER_SIZE < enemy->x+PLAYER_SIZE)) {
-                    if ((particle->position.y > enemy->y && particle->position.y < enemy->y+PLAYER_SIZE) ||
-                        (particle->position.y+PLAYER_SIZE > enemy->y && particle->position.y+PLAYER_SIZE < enemy->y+PLAYER_SIZE)) {
-                        enemy->alive = false;
+                if ((particle->position.x > enemy->entity.x && particle->position.x < enemy->entity.x+PLAYER_SIZE) ||
+                    (particle->position.x+PLAYER_SIZE > enemy->entity.x && particle->position.x+PLAYER_SIZE < enemy->entity.x+PLAYER_SIZE)) {
+                    if ((particle->position.y > enemy->entity.y && particle->position.y < enemy->entity.y+PLAYER_SIZE) ||
+                        (particle->position.y+PLAYER_SIZE > enemy->entity.y && particle->position.y+PLAYER_SIZE < enemy->entity.y+PLAYER_SIZE)) {
+                        enemy->entity.alive = false;
                         break;
                     }
                 }
@@ -318,10 +336,10 @@ void render() {
 
     for (int i = 0; i < MAX_ENEMIES; i++) {
         enemy_t enemy = enemies[i];
-        if (enemy.alive)
+        if (enemy.entity.alive)
             render_fill_rect(0x0000ff,
-                             enemy.x,
-                             enemy.y,
+                             enemy.entity.x,
+                             enemy.entity.y,
                              PLAYER_SIZE, PLAYER_SIZE);
     }
 }
@@ -330,16 +348,16 @@ void game_keydown(int keycode) {
     switch (keycode) {
     case ARROW_RIGHT:
     case 'D':
-        right = true;
+        player.right = true;
         break;
     case ARROW_LEFT:
     case 'A':
-        left = true;
+        player.left = true;
         break;
     case ' ':
     case ARROW_UP:
     case 'W':
-        jumping = true;
+        player.jumping = true;
         break;
     case ARROW_DOWN:
     case 'S':
@@ -357,16 +375,16 @@ void game_keyup(int keycode) {
     switch (keycode) {
     case ARROW_RIGHT:
     case 'D':
-        right = false;
+        player.right = false;
         break;
     case ARROW_LEFT:
     case 'A':
-        left = false;
+        player.left = false;
         break;
     case ' ':
     case ARROW_UP:
     case 'W':
-        jumping = false;
+        player.jumping = false;
         break;
     case ARROW_DOWN:
     case 'S':
@@ -378,6 +396,9 @@ void game_keyup(int keycode) {
         player.y     = HEIGHT - PLAYER_SIZE;
         player.alive = true;
         level        = -1;
+        for (int i = 0; i < MAX_ENEMIES; i++) {
+            enemies[i].entity.alive = false;
+        }
         break;
     }
 }

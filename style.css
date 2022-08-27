@@ -9,12 +9,13 @@ body {
 
 #canvas {
     margin: 4vh 0;
+    max-height: 80vh;
 }
 
 .buttons > button {
     width: 8vw;
     height: 8vw;
-    font-size: 2em;
+    font-size: 2vw;
     margin: 0 1vw;
     border-radius: 10%;
     border: 2px solid #847b6d;

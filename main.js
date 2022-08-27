@@ -7,7 +7,15 @@ const canvas  = document.getElementById("canvas");
 const ctx     = canvas.getContext("2d");
 
 document.addEventListener('keydown', (e) => (wasm)? wasm.game_keydown(e.keyCode):{});
-document.addEventListener('keyup', (e) => (wasm)? wasm.game_keyup(e.keyCode):{});
+document.addEventListener('keyup',   (e) => (wasm)? wasm.game_keyup(e.keyCode):{});
+document.addEventListener('mouseup', (e) => {
+    if (wasm) {
+        wasm.game_keyup(65);
+        wasm.game_keyup(32);
+        wasm.game_keyup(68);
+        wasm.game_keyup(83);
+    }
+});
 
 let prev = 0;
 function loop(timestamp) {

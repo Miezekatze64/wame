@@ -2,6 +2,8 @@
 
 - Try it on [github.io](https://miezekatze64.github.io/wame)
 
+OR:
+
 - Compile this program using
   
   ```shell

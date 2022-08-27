@@ -315,7 +315,7 @@ void render() {
         }
     }
 
-    if (!player.alive) render_text(0xffffff, "You lost!\n(r to restart)", 40, WIDTH/2, HEIGHT/2);
+    if (!player.alive) render_text(0xffffff, "You lost! (r to restart)", 40, WIDTH/2, HEIGHT/2);
 
     int goalx = goal.x*BLOCK_SIZE;
     int goaly = goal.y*BLOCK_SIZE;
@@ -357,6 +357,7 @@ void game_keydown(int keycode) {
     case ' ':
     case ARROW_UP:
     case 'W':
+        println("JUMP!");
         player.jumping = true;
         break;
     case ARROW_DOWN:

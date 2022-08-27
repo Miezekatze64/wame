@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WASM game</title>
     <link rel="stylesheet" href="style.css">
   </head>
@@ -11,10 +12,10 @@
     </canvas>
     <div class="buttons" id="buttons">
       <button onclick="wasm.game_keyup(82)">Restart</button>
-      <button onmousedown="wasm.game_keydown(65)" onmouseup="wasm.game_keyup(65)">←</button>
-      <button onmousedown="wasm.game_keydown(32)" onmouseup="wasm.game_keyup(32)">↑</button>
-      <button onmousedown="wasm.game_keydown(68)" onmouseup="wasm.game_keyup(68)">→</button>
-      <button onmousedown="wasm.game_keydown(83)" onmouseup="wasm.game_keyup(83)">Shoot</button>
+      <button onmousedown="wasm.game_keydown(65)" onmouseup="wasm.game_keyup(65)" ontouchstart="wasm.game_keydown(65)" ontouchend="wasm.game_keyup(65)">←</button>
+      <button onmousedown="wasm.game_keydown(32)" onmouseup="wasm.game_keyup(32)" ontouchstart="wasm.game_keydown(32)" ontouchend="wasm.game_keyup(32)">↑</button>
+      <button onmousedown="wasm.game_keydown(68)" onmouseup="wasm.game_keyup(68)" ontouchstart="wasm.game_keydown(68)" ontouchend="wasm.game_keyup(68)">→</button>
+      <button onmousedown="wasm.game_keydown(83)" onmouseup="wasm.game_keyup(83)" ontouchstart="wasm.game_keydown(83)" ontouchend="wasm.game_keyup(83)">Shoot</button>
     </div>
     <script src="./main.js"></script>
   </body>

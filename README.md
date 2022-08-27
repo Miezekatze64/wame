@@ -9,7 +9,12 @@ OR:
   ```shell
   $ make
   ```
-
+THEN
+- Run the SDL version:
+    ```shell
+    $ ./main
+    ``` 
+OR:
 - Start an httpserver:
   
   ```shell
